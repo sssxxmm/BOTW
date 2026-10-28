@@ -1,9 +1,9 @@
-name: Build Switch IPA (BotW)
+name: Build Switch IPA
 on:
   workflow_dispatch:
     inputs:
       stage:
-        description: "prepare = 셰이더 빌드 및 캐시 생성 / pack = IPA 최종 패키징"
+        description: "prepare = 셰이더까지(오래 걸림) / pack = IPA 만들기"
         type: choice
         options: [prepare, pack]
         default: prepare
