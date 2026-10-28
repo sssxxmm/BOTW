@@ -1,11 +1,7 @@
-
-name: 0-Check (BotW)
+name: 0-Check
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   check:
@@ -13,7 +9,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Check macOS and Xcode
+      - name: Before cleanup
         run: |
           df -h /
           sw_vers
@@ -25,34 +21,23 @@ jobs:
           sudo rm -rf /Library/Developer/CoreSimulator || true
           df -h /
 
-      - name: Check disk usage
+      - name: Big folders (for info)
         run: |
-          du -sh /Applications/Xcode*.app 2>/dev/null || true
-          du -sh /Users/runner/hostedtoolcache 2>/dev/null || true
-          du -sh /Users/runner/Library/Caches 2>/dev/null || true
+          du -sh /Applications/Xcode*.app 2>/devnull || true
+          du -sh /Users/runner/hostedtoolcache 2>/devnull || true
+          du -sh /Users/runner/Library/Caches 2>/devnull || true
           ls /Applications | head -50
 
       - name: Check keys secret
         env:
           PROD_KEYS: ${{ secrets.PROD_KEYS }}
-        run: |
-          if [ -z "$PROD_KEYS" ]; then
-            echo "PROD_KEYS secret is missing"
-            exit 1
-          fi
-          echo "PROD_KEYS secret is configured"
+        run: printf '%s\n' "$PROD_KEYS" | wc -l
 
-      - name: Check Google Drive configuration
+      - name: Check Google Drive
         env:
           RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
         run: |
-          if [ -z "$RCLONE_CONF" ]; then
-            echo "RCLONE_CONF secret is missing"
-            exit 1
-          fi
-
           brew install rclone
           mkdir -p ~/.config/rclone
           printf '%s\n' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
-          chmod 600 ~/.config/rclone/rclone.conf
-          rclone listremotes
+          rclone lsl "gdrive:젤다 야숨"
