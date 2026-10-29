@@ -47,7 +47,7 @@ jobs:
     - name: Restore cache from Drive (pack only)
       if: inputs.stage == 'pack'
       run: |
-        rclone cat "gdrive:SwitchGames/cache/build.tar" | tar -C ~/Games -xf -
+        rclone cat "gdrive:SwitchGames/cache/BotW_Build.tar" | tar -C ~/Games -xf -
         ls ~/Games
         df -h /
 
@@ -75,8 +75,8 @@ jobs:
         df -h /
         ls ~/Games
         tar -C ~/Games -cf - $(cd ~/Games && ls -d *_build) \
-          | rclone rcat "gdrive:SwitchGames/cache/build.tar" \
-              --drive-chunk-size 128M -P
+          | rclone rcat "gdrive:SwitchGames/cache/BotW_Build.tar" \
+              --drive-chunk-size 256M --tpslimit 5 -P
 
     - name: Stage 2 - pack IPA
       if: inputs.stage == 'pack'
@@ -93,10 +93,10 @@ jobs:
           done
         }
         monitor & MON=$!
-        trap "kill $MON 2>/devnull" EXIT
+        trap "kill $MON 2>/dev/null" EXIT
         cd nxnative
         nice -n 19 python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal
 
     - name: Stage 2 - upload IPA to Drive
       if: inputs.stage == 'pack'
-      run: rclone copy ~/Games/BotW.ipa "gdrive:SwitchGames/output" -P
+      run: rclone copy ~/Games/BotW.ipa "gdrive:SwitchGames/output" --retries 10 --low-level-retries 20 --tpslimit 5 -P
