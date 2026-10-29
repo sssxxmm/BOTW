@@ -86,6 +86,8 @@ jobs:
       if: inputs.stage == 'pack'
       env:
         ALLOW_OTHER_METAL: "True"
+        LANG: en_US.UTF-8
+        LC_ALL: en_US.UTF-8
       run: |
         monitor() {
           while true; do
@@ -99,7 +101,16 @@ jobs:
         monitor & MON=$!
         trap "kill $MON 2>/dev/null" EXIT
         cd nxnative
-        nice -n 19 python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal
+        for i in 1 2 3; do
+          echo "=== BUILD ATTEMPT $i ==="
+          find ~/Games -path '*_build/*' -name '*.tmp-*' -delete 2>/dev/null || true
+          if nice -n 19 python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal; then
+            break
+          fi
+          echo "attempt $i failed"
+          df -h /
+          if [ "$i" = 3 ]; then exit 1; fi
+        done
 
     - name: Stage 2 - upload IPA to Drive
       if: inputs.stage == 'pack'
