@@ -6,7 +6,7 @@ on:
         description: "prepare = 셰이더까지(오래 걸림) / pack = IPA 만들기"
         type: choice
         options: [prepare, pack]
-        default: prepare
+        default: pack
 
 jobs:
   build:
@@ -51,8 +51,12 @@ jobs:
         ls ~/Games
         df -h /
 
-    - name: Clone nxnative
-      run: git clone https://github.com/seedds/nxnative.git
+    - name: Clone nxnative (pinned)
+      run: |
+        git clone https://github.com/seedds/nxnative.git
+        cd nxnative
+        git checkout $(git rev-list -n 1 --before="2026-10-28T03:00:00Z" HEAD)
+        git log -1 --format='%H %cd'
 
     - name: Setup prod.keys
       env:
