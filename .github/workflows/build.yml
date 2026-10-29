@@ -47,4 +47,56 @@ jobs:
     - name: Restore cache from Drive (pack only)
       if: inputs.stage == 'pack'
       run: |
-        rclone cat "gdrive:SwitchGames/cache/build.tar" | tar -C ~/Games
+        rclone cat "gdrive:SwitchGames/cache/build.tar" | tar -C ~/Games -xf -
+        ls ~/Games
+        df -h /
+
+    - name: Clone nxnative
+      run: git clone https://github.com/seedds/nxnative.git
+
+    - name: Setup prod.keys
+      env:
+        PROD_KEYS: ${{ secrets.PROD_KEYS }}
+      run: |
+        mkdir -p ~/keys
+        printf '%s\n' "$PROD_KEYS" > ~/keys/prod.keys
+
+    - name: Stage 1 - prepare (shaders)
+      if: inputs.stage == 'prepare'
+      env:
+        ALLOW_OTHER_METAL: "True"
+      run: |
+        cd nxnative
+        python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys --prepare-xcode --allow-other-metal
+
+    - name: Stage 1 - save cache to Drive
+      if: inputs.stage == 'prepare'
+      run: |
+        df -h /
+        ls ~/Games
+        tar -C ~/Games -cf - $(cd ~/Games && ls -d *_build) \
+          | rclone rcat "gdrive:SwitchGames/cache/build.tar" \
+              --drive-chunk-size 128M -P
+
+    - name: Stage 2 - pack IPA
+      if: inputs.stage == 'pack'
+      env:
+        ALLOW_OTHER_METAL: "True"
+      run: |
+        monitor() {
+          while true; do
+            echo "=== MONITOR $(date) ==="
+            df -h / | tail -1
+            vm_stat | head -4
+            ps -axo rss,comm | sort -nr | head -3
+            sleep 120
+          done
+        }
+        monitor & MON=$!
+        trap "kill $MON 2>/devnull" EXIT
+        cd nxnative
+        nice -n 19 python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal
+
+    - name: Stage 2 - upload IPA to Drive
+      if: inputs.stage == 'pack'
+      run: rclone copy ~/Games/BotW.ipa "gdrive:SwitchGames/output" -P
