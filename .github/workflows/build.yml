@@ -1,12 +1,6 @@
 name: Build Switch IPA
 on:
   workflow_dispatch:
-    inputs:
-      stage:
-        description: "prepare = 셰이더까지(오래 걸림) / pack = IPA 만들기"
-        type: choice
-        options: [prepare, pack]
-        default: pack
 
 jobs:
   build:
@@ -44,13 +38,6 @@ jobs:
         rclone copy "gdrive:젤다 야숨/" ~/Games/ -P --include "*.xci" --include "*.nsp"
         ls -lh ~/Games
 
-    - name: Restore cache from Drive (pack only)
-      if: inputs.stage == 'pack'
-      run: |
-        rclone cat "gdrive:SwitchGames/cache/BotW_Build.tar" | tar -C ~/Games -xf -
-        ls ~/Games
-        df -h /
-
     - name: Clone nxnative (pinned)
       run: |
         git clone https://github.com/seedds/nxnative.git
@@ -65,30 +52,10 @@ jobs:
         mkdir -p ~/keys
         printf '%s\n' "$PROD_KEYS" > ~/keys/prod.keys
 
-    - name: Stage 1 - prepare (shaders)
-      if: inputs.stage == 'prepare'
-      env:
-        ALLOW_OTHER_METAL: "True"
-      run: |
-        cd nxnative
-        python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys --prepare-xcode --allow-other-metal
-
-    - name: Stage 1 - save cache to Drive
-      if: inputs.stage == 'prepare'
-      run: |
-        df -h /
-        ls ~/Games
-        tar -C ~/Games -cf - $(cd ~/Games && ls -d *_build) \
-          | rclone rcat "gdrive:SwitchGames/cache/BotW_Build.tar" \
-              --drive-chunk-size 256M --tpslimit 5 -P
-
-    - name: Stage 2 - pack IPA
-      if: inputs.stage == 'pack'
+    - name: Build IPA
       env:
         ALLOW_OTHER_METAL: "True"
         PYTHONUNBUFFERED: "1"
-        LANG: en_US.UTF-8
-        LC_ALL: en_US.UTF-8
       run: |
         monitor() {
           while true; do
@@ -101,23 +68,15 @@ jobs:
         }
         monitor & MON=$!
         trap "kill $MON 2>/dev/null" EXIT
-
         cd nxnative
+        nice -n 19 python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal
 
-        for i in 1 2 3; do
-          echo "=== BUILD ATTEMPT $i ==="
-          if nice -n 19 python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal; then
-            break
-          fi
-          echo "attempt $i failed"
-          df -h /
-          echo "--- leftover processes ---"
-          ps -axo pid,etime,command | grep "_build/shader" | grep -v grep || true
-          pkill -f "_build/shader" 2>/dev/null || true
-          sleep 15
-          if [ "$i" = 3 ]; then exit 1; fi
-        done
-
-    - name: Stage 2 - upload IPA to Drive
-      if: inputs.stage == 'pack'
+    - name: Upload IPA to Drive
       run: rclone copy ~/Games/BotW.ipa "gdrive:SwitchGames/output" --retries 10 --low-level-retries 20 --tpslimit 5 -P
+
+    - name: Save logs to Drive (on failure)
+      if: failure()
+      run: |
+        for d in ~/Games/*_build; do
+          rclone copy "$d/logs" "gdrive:SwitchGames/logs/$(basename "$d")" || true
+        done
