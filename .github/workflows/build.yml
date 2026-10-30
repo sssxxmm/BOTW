@@ -106,12 +106,15 @@ jobs:
 
         for i in 1 2 3; do
           echo "=== BUILD ATTEMPT $i ==="
-          find ~/Games -path '*_build/*' -name '*.tmp-*' -delete 2>/devnull || true
-          if python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal; then
+          if nice -n 19 python3 scripts/build_ipa_from_nsp.py ~/Games -k ~/keys/prod.keys -o ~/Games/BotW.ipa --allow-other-metal; then
             break
           fi
           echo "attempt $i failed"
           df -h /
+          echo "--- leftover processes ---"
+          ps -axo pid,etime,command | grep "_build/shader" | grep -v grep || true
+          pkill -f "_build/shader" 2>/dev/null || true
+          sleep 15
           if [ "$i" = 3 ]; then exit 1; fi
         done
 
